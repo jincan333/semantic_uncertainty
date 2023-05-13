@@ -10,8 +10,8 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 import wandb
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--evaluation_model', type=str, default='opt-350m')
-parser.add_argument('--generation_model', type=str, default='opt-350m')
+parser.add_argument('--evaluation_model', type=str, default='opt-125m')
+parser.add_argument('--generation_model', type=str, default='opt-125m')
 parser.add_argument('--run_id', type=str, default='run_1')
 args = parser.parse_args()
 
@@ -48,10 +48,10 @@ run_name = wandb.run.name
 
 opt_models = ['opt-125m', 'opt-350m', 'opt-1.3b', 'opt-2.7b', 'opt-6.7b', 'opt-13b', 'opt-30b']
 
-with open(f'{config.output_dir}/{run_name}/{args.generation_model}_generations.pkl', 'rb') as infile:
+with open(f'{config.output_dir}/clean/{run_name}/{args.generation_model}_generations.pkl', 'rb') as infile:
     sequences = pickle.load(infile)
 
-with open(f'{config.output_dir}/{run_name}/{args.generation_model}_generations_similarities.pkl', 'rb') as infile:
+with open(f'{config.output_dir}/clean/{run_name}/{args.generation_model}_generations_similarities.pkl', 'rb') as infile:
     similarities_dict = pickle.load(infile)
 
 
@@ -73,6 +73,8 @@ def get_neg_loglikelihoods(model, sequences):
             neg_log_likelihoods = torch.zeros((generations.shape[0],))
             neg_unconditioned_log_likelihoods = torch.zeros((generations.shape[0],))
             pointwise_mutual_information = torch.zeros((generations.shape[0],))
+            average_probabilities = torch.zeros((generations.shape[0],))
+            average_unconditioned_probabilities = torch.zeros((generations.shape[0],))
             sequence_embeddings = []
 
             for generation_index in range(generations.shape[0]):
@@ -83,16 +85,24 @@ def get_neg_loglikelihoods(model, sequences):
                 target_ids = generation.clone()
                 target_ids[:len(prompt)] = -100
                 model_output = model(torch.reshape(generation, (1, -1)), labels=target_ids, output_hidden_states=True)
+                # TODO should be len(prompt) ?
                 generation_only = generation.clone()[(len(prompt) - 1):]
                 unconditioned_model_output = model(torch.reshape(generation_only, (1, -1)),
                                                    labels=generation_only,
                                                    output_hidden_states=True)
                 hidden_states = model_output['hidden_states']
                 average_neg_log_likelihood = model_output['loss']
+                average_probability = torch.exp(-model_output['loss'])
 
                 average_unconditioned_neg_log_likelihood = unconditioned_model_output['loss']
+                average_unconditioned_probability = torch.exp(-unconditioned_model_output['loss'])
+
                 average_neg_log_likelihoods[generation_index] = average_neg_log_likelihood
                 average_unconditioned_neg_log_likelihoods[generation_index] = average_unconditioned_neg_log_likelihood
+
+                average_probabilities[generation_index] = average_probability
+                average_unconditioned_probabilities[generation_index] = average_unconditioned_probability
+
                 neg_log_likelihoods[generation_index] = average_neg_log_likelihood * (len(generation) - len(prompt))
                 neg_unconditioned_log_likelihoods[generation_index] = average_unconditioned_neg_log_likelihood * (
                     len(generation) - len(prompt))
@@ -110,6 +120,7 @@ def get_neg_loglikelihoods(model, sequences):
                                  output_hidden_states=True)
             hidden_states = model_output['hidden_states']
             average_neg_log_likelihood_of_most_likely_gen = model_output['loss']
+            average_probability_of_most_likely_gen = torch.exp(-model_output['loss'])
             most_likely_generation_embedding = torch.mean(hidden_states[-1], dim=1)
 
             second_most_likely_generation = sample['second_most_likely_generation_ids'].to(device)
@@ -120,6 +131,7 @@ def get_neg_loglikelihoods(model, sequences):
                                  output_hidden_states=True)
             hidden_states = model_output['hidden_states']
             average_neg_log_likelihood_of_second_most_likely_gen = model_output['loss']
+            average_probability_of_second_most_likely_gen = torch.exp(-model_output['loss'])
             second_most_likely_generation_embedding = torch.mean(hidden_states[-1], dim=1)
 
             neg_log_likelihood_of_most_likely_gen = average_neg_log_likelihood_of_most_likely_gen * (
@@ -136,9 +148,14 @@ def get_neg_loglikelihoods(model, sequences):
             result_dict['neg_unconditioned_log_likelihoods'] = neg_unconditioned_log_likelihoods
             result_dict['pointwise_mutual_information'] = pointwise_mutual_information
             result_dict['average_neg_log_likelihood_of_most_likely_gen'] = average_neg_log_likelihood_of_most_likely_gen
-            result_dict[
-                'average_neg_log_likelihood_of_second_most_likely_gen'] = average_neg_log_likelihood_of_second_most_likely_gen
+            result_dict['average_neg_log_likelihood_of_second_most_likely_gen'] = average_neg_log_likelihood_of_second_most_likely_gen
             result_dict['neg_log_likelihood_of_most_likely_gen'] = neg_log_likelihood_of_most_likely_gen
+            result_dict['average_probabilities'] = average_probabilities
+            result_dict['average_unconditioned_probabilities'] = average_unconditioned_probabilities
+            result_dict['average_probability_of_most_likely_gen'] = average_probability_of_most_likely_gen
+            result_dict['average_probability_of_second_most_likely_gen'] = average_probability_of_second_most_likely_gen
+
+
             result_dict['semantic_set_ids'] = torch.tensor(similarities_dict[id_[0]]['semantic_set_ids'], device=device)
             result_dict['id'] = id_
             result.append(result_dict)
@@ -148,6 +165,6 @@ def get_neg_loglikelihoods(model, sequences):
 
 likelihoods = get_neg_loglikelihoods(model, sequences)
 
-with open(f'{config.data_dir}/{run_name}/{args.generation_model}_generations_{args.evaluation_model}_likelihoods.pkl',
+with open(f'{config.output_dir}/clean/{run_name}/{args.generation_model}_generations_{args.evaluation_model}_likelihoods.pkl',
           'wb') as outfile:
     pickle.dump(likelihoods, outfile)

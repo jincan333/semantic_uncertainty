@@ -34,6 +34,8 @@ for sample_id, sample in enumerate(data):
     questions = sample['questions']
     answers = sample['answers']
     additional_answers = sample['additional_answers']
+
+
     for question_index, question in enumerate(questions):
         dataset['story'].append(story)
         dataset['question'].append(question['input_text'])
@@ -78,15 +80,16 @@ for sample_id, sample in enumerate(data):
         prediction = model(torch.tensor(encoded_input['input_ids'], device='cuda'))['logits']
 
         predicted_label = torch.argmax(prediction, dim=1)
+        # 0 contradictory
         if 0 in predicted_label:
             has_semantically_different_answers = True
 
         dataset['semantic_variability'].append(has_semantically_different_answers)
 
         results = rouge.compute(predictions=answer_list_1, references=answer_list_2)
-        dataset['rouge1'].append(results['rouge1'].mid.fmeasure)
-        dataset['rouge2'].append(results['rouge2'].mid.fmeasure)
-        dataset['rougeL'].append(results['rougeL'].mid.fmeasure)
+        dataset['rouge1'].append(results['rouge1'])
+        dataset['rouge2'].append(results['rouge2'])
+        dataset['rougeL'].append(results['rougeL'])
 
 dataset_df = pd.DataFrame.from_dict(dataset)
 

@@ -13,7 +13,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--type_of_question', type=str)
 parser.add_argument('--num_generations_per_prompt', type=int, default=5)
 parser.add_argument('--fraction_of_data_to_use', type=float, default=0.9)
-parser.add_argument('--model', type=str, default='opt-350m')
+parser.add_argument('--model', type=str, default='opt-125m')
 parser.add_argument('--run_id', type=str, default='run_1')
 parser.add_argument('--temperature', type=float, default='1.0')
 parser.add_argument('--num_beams', type=int, default='5')
@@ -24,7 +24,7 @@ args = parser.parse_args()
 model = AutoModelForCausalLM.from_pretrained(f"facebook/{args.model}",
                                              torch_dtype=torch.float16,
                                              cache_dir=config.data_dir).cuda()
-tokenizer = AutoTokenizer.from_pretrained(f"facebook/opt-350m", use_fast=False, cache_dir=config.data_dir)
+tokenizer = AutoTokenizer.from_pretrained(f"facebook/opt-125m", use_fast=False, cache_dir=config.data_dir)
 
 if args.model == 'opt-30b':
     accelerate.dispatch_model(model, device_map=config.device_map)

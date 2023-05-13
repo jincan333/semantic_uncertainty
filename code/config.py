@@ -55,5 +55,6 @@ device_map = {
 }
 
 data_dir = './data'
-hf_datasets_cache = ''
+hf_datasets_cache = './hf_dataset_cache'
+hf_cache_dir = './hf_cache'
 output_dir = './output'

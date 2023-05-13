@@ -18,7 +18,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--type_of_question', type=str)
 parser.add_argument('--num_generations_per_prompt', type=int, default=5)
 parser.add_argument('--fraction_of_data_to_use', type=float, default=0.9)
-parser.add_argument('--model', type=str, default='opt-350m')
+parser.add_argument('--model', type=str, default='opt-125m')
 parser.add_argument('--run_id', type=str, default='run_1')
 parser.add_argument('--temperature', type=float, default='1.0')
 parser.add_argument('--num_beams', type=int, default='5')
@@ -63,10 +63,12 @@ tokenizer = AutoTokenizer.from_pretrained(f"facebook/{args.model}", use_fast=Fal
 opt_models = ['opt-125m', 'opt-350m', 'opt-1.3b', 'opt-2.7b', 'opt-6.7b', 'opt-13b', 'opt-30b']
 
 if args.dataset == 'coqa':
-    dataset = datasets.load_from_disk(f'{config.output_dir}/coqa_dataset')
+    # dataset = datasets.load_from_disk(f'{config.output_dir}/coqa_dataset')
+    dataset = datasets.load_from_disk(f'{config.data_dir}/coqa_dataset')
     id_to_question_mapping = dict(zip(dataset['id'], dataset['question']))
 elif args.dataset == 'trivia_qa':
-    dataset = datasets.load_from_disk(f'{config.output_dir}/trivia_qa')
+    # dataset = datasets.load_from_disk(f'{config.output_dir}/trivia_qa')
+    dataset = datasets.load_from_disk(f'{config.data_dir}/trivia_qa')
 
 if args.fraction_of_data_to_use < 1.0:
     train_dataset = dataset.train_test_split(test_size=(1 - args.fraction_of_data_to_use), seed=seed_value)['train']
@@ -211,7 +213,9 @@ def get_generations(model, dataloader, number_of_generations):
                     sequence_dict['exact_match'] = max(results['exact_match'], sequence_dict['exact_match'])
                     rouge_results = rouge.compute(predictions=predictions, references=references)
                     for rouge_type in rouge_types:
-                        sequence_dict[rouge_type + '_to_target'] = max(rouge_results[rouge_type].mid.fmeasure,
+                        # sequence_dict[rouge_type + '_to_target'] = max(rouge_results[rouge_type].mid.fmeasure,
+                        #                                                sequence_dict[rouge_type + '_to_target'])
+                        sequence_dict[rouge_type + '_to_target'] = max(rouge_results[rouge_type],
                                                                        sequence_dict[rouge_type + '_to_target'])
 
                 sequences.append(sequence_dict)

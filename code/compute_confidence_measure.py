@@ -9,8 +9,8 @@ import torch
 import wandb
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--generation_model', type=str, default='opt-350m')
-parser.add_argument('--evaluation_model', type=str, default='opt-350m')
+parser.add_argument('--generation_model', type=str, default='opt-125m')
+parser.add_argument('--evaluation_model', type=str, default='opt-125m')
 parser.add_argument('--run_id', type=str, default='run_1')
 parser.add_argument('--verbose', type=bool, default=True)
 args = parser.parse_args()
@@ -151,7 +151,7 @@ def get_margin_probability_uncertainty_measure(log_likelihoods):
 
 list_of_results = []
 
-with open(f'{config.output_dir}/{run_name}/{args.generation_model}_generations_{args.evaluation_model}_likelihoods.pkl',
+with open(f'{config.output_dir}/clean/{run_name}/{args.generation_model}_generations_{args.evaluation_model}_likelihoods.pkl',
           'rb') as infile:
     sequences = pickle.load(infile)
     list_of_results.append((args.evaluation_model, sequences))
@@ -210,7 +210,7 @@ for i in range(len(average_predictive_entropy_on_subsets)):
     overall_results[f'number_of_semantic_sets_on_subset_{i + 1}'] = number_of_semantic_sets_on_subsets[i]
 overall_results['average_pointwise_mutual_information'] = average_pointwise_mutual_information
 
-with open(f'{config.output_dir}/{run_name}/aggregated_likelihoods_{args.generation_model}_generations.pkl',
+with open(f'{config.output_dir}/clean/{run_name}/aggregated_likelihoods_{args.generation_model}_generations.pkl',
           'wb') as outfile:
     pickle.dump(overall_results, outfile)
 

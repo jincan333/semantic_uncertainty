@@ -9,6 +9,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import seaborn as sns
 import sklearn
+from sklearn.metrics import roc_auc_score
 import torch
 from tqdm import tqdm
 from transformers import AutoModelForCausalLM, AutoTokenizer
@@ -38,7 +39,7 @@ torch.manual_seed(seed_value)
 os.environ["HF_DATASETS_CACHE"] = config.hf_datasets_cache
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--generation_model', type=str, default='opt-1.3b')
+parser.add_argument('--generation_model', type=str, default='opt-125m')
 parser.add_argument('--run_id_for_few_shot_prompt', type=str, default='run_1')
 parser.add_argument('--run_id_for_evaluation', type=str, default='run_1')
 args = parser.parse_args()
@@ -46,7 +47,7 @@ args = parser.parse_args()
 wandb.init(project='nlg_uncertainty', id=args.run_id_for_few_shot_prompt, config=args, resume='allow')
 model_name = wandb.config.model
 
-generation_tokenizer = AutoTokenizer.from_pretrained(f"facebook/opt-350m", use_fast=False, cache_dir=config.data_dir)
+generation_tokenizer = AutoTokenizer.from_pretrained(f"facebook/opt-125m", use_fast=False, cache_dir=config.data_dir)
 model = AutoModelForCausalLM.from_pretrained(f"facebook/{model_name}",
                                              torch_dtype=torch.float16,
                                              cache_dir=config.data_dir).cuda()
@@ -58,7 +59,7 @@ if model_name == 'opt-30b':
 
 run_name = wandb.run.name
 
-with open(f'{config.output_dir} /{run_name}/{model_name}_generations.pkl', 'rb') as infile:
+with open(f'{config.output_dir}/clean/{run_name}/{model_name}_generations.pkl', 'rb') as infile:
     sequences_for_few_shot_prompt = pickle.load(infile)
 
 wandb.finish()
@@ -121,8 +122,8 @@ with torch.no_grad():
         labels_across_datasets += corrects
         p_trues_across_datasets += p_trues
 
-    p_true_auroc = sklearn.metrics.roc_auc_score(1 - torch.tensor(corrects), torch.tensor(p_trues))
+    p_true_auroc = roc_auc_score(1 - torch.tensor(corrects), torch.tensor(p_trues))
 
     # Store p_true aurocs in a pickle file
-    with open(f'{config.output_dir}/{run_name}/{model_name}_p_true_aurocs.pkl', 'wb') as outfile:
+    with open(f'{config.output_dir}/clean/{run_name}/{model_name}_p_true_aurocs.pkl', 'wb') as outfile:
         pickle.dump(p_true_auroc, outfile)

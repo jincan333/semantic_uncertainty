@@ -12,7 +12,7 @@ import config
 import wandb
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--generation_model', type=str, default='opt-350m')
+parser.add_argument('--generation_model', type=str, default='opt-125m')
 parser.add_argument('--run_id', type=str, default='run_1')
 args = parser.parse_args()
 
@@ -35,15 +35,15 @@ torch.manual_seed(seed_value)
 
 os.environ["HF_DATASETS_CACHE"] = config.hf_datasets_cache
 
-generation_tokenizer = AutoTokenizer.from_pretrained(f"facebook/opt-350m", use_fast=False, cache_dir=config.data_dir)
+generation_tokenizer = AutoTokenizer.from_pretrained(f"facebook/opt-125m", use_fast=False, cache_dir=config.data_dir)
 
 wandb.init(project='nlg_uncertainty', id=args.run_id, config=args, resume='allow')
 
 run_name = wandb.run.name
 
-tokenizer = AutoTokenizer.from_pretrained(f"facebook/opt-350m", use_fast=False, cache_dir=config.data_dir)
+tokenizer = AutoTokenizer.from_pretrained(f"facebook/opt-125m", use_fast=False, cache_dir=config.data_dir)
 
-with open(f'{config.output_dir}/{run_name}/{args.generation_model}_generations.pkl', 'rb') as infile:
+with open(f'{config.output_dir}/sequences/{run_name}/{args.generation_model}_generations.pkl', 'rb') as infile:
     sequences = pickle.load(infile)
 
 cleaned_sequences = []
@@ -75,5 +75,5 @@ for sample in tqdm(sequences):
     sample['cleaned_generations'] = cleaned_generations
     cleaned_sequences.append(sample)
 
-with open(f'{config.output_dir}/{run_name}/{args.generation_model}_generations.pkl', 'wb') as outfile:
+with open(f'{config.output_dir}/clean/{run_name}/{args.generation_model}_generations.pkl', 'wb') as outfile:
     pickle.dump(cleaned_sequences, outfile)
