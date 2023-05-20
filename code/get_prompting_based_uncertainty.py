@@ -39,7 +39,7 @@ torch.manual_seed(seed_value)
 os.environ["HF_DATASETS_CACHE"] = config.hf_datasets_cache
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--generation_model', type=str, default='opt-125m')
+parser.add_argument('--generation_model', type=str, default='opt-2.7b')
 parser.add_argument('--run_id_for_few_shot_prompt', type=str, default='run_1')
 parser.add_argument('--run_id_for_evaluation', type=str, default='run_1')
 args = parser.parse_args()
@@ -47,7 +47,7 @@ args = parser.parse_args()
 wandb.init(project='nlg_uncertainty', id=args.run_id_for_few_shot_prompt, config=args, resume='allow')
 model_name = wandb.config.model
 
-generation_tokenizer = AutoTokenizer.from_pretrained(f"facebook/opt-125m", use_fast=False, cache_dir=config.data_dir)
+generation_tokenizer = AutoTokenizer.from_pretrained(f"facebook/opt-2.7b", use_fast=False, cache_dir=config.data_dir)
 model = AutoModelForCausalLM.from_pretrained(f"facebook/{model_name}",
                                              torch_dtype=torch.float16,
                                              cache_dir=config.data_dir).cuda()

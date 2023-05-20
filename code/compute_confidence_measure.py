@@ -9,8 +9,8 @@ import torch
 import wandb
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--generation_model', type=str, default='opt-125m')
-parser.add_argument('--evaluation_model', type=str, default='opt-125m')
+parser.add_argument('--generation_model', type=str, default='opt-2.7b')
+parser.add_argument('--evaluation_model', type=str, default='opt-2.7b')
 parser.add_argument('--run_id', type=str, default='run_1')
 parser.add_argument('--verbose', type=bool, default=True)
 args = parser.parse_args()
@@ -54,7 +54,8 @@ def get_overall_log_likelihoods(list_of_results):
 
     list_of_keys = ['neg_log_likelihoods', 'average_neg_log_likelihoods', 'sequence_embeddings',\
                     'pointwise_mutual_information', 'average_neg_log_likelihood_of_most_likely_gen',\
-                    'neg_log_likelihood_of_most_likely_gen', 'semantic_set_ids']
+                    'neg_log_likelihood_of_most_likely_gen', 'average_neg_log_likelihood_of_second_most_likely_gen',\
+                    'semantic_set_ids']
 
     for key in list_of_keys:
         list_of_ids = []
@@ -130,7 +131,7 @@ def get_predictive_entropy_over_concepts(log_likelihoods, semantic_set_ids):
     for row_index in range(mean_across_models.shape[0]):
         aggregated_likelihoods = []
         row = mean_across_models[row_index]
-        semantic_set_ids_row = semantic_set_ids[row_index]
+        semantic_set_ids_row = semantic_set_ids[row_index].to('cpu')
         for semantic_set_id in torch.unique(semantic_set_ids_row):
             aggregated_likelihoods.append(torch.logsumexp(row[semantic_set_ids_row == semantic_set_id], dim=0))
         aggregated_likelihoods = torch.tensor(aggregated_likelihoods) - llh_shift
@@ -159,10 +160,8 @@ with open(f'{config.output_dir}/clean/{run_name}/{args.generation_model}_generat
 overall_results = get_overall_log_likelihoods(list_of_results)
 mutual_information = get_mutual_information(-overall_results['neg_log_likelihoods'])
 predictive_entropy = get_predictive_entropy(-overall_results['neg_log_likelihoods'])
-predictive_entropy_over_concepts = get_predictive_entropy_over_concepts(-overall_results['average_neg_log_likelihoods'],
-                                                                        overall_results['semantic_set_ids'])
-unnormalised_entropy_over_concepts = get_predictive_entropy_over_concepts(-overall_results['neg_log_likelihoods'],
-                                                                          overall_results['semantic_set_ids'])
+predictive_entropy_over_concepts = get_predictive_entropy_over_concepts(-overall_results['average_neg_log_likelihoods'], overall_results['semantic_set_ids'])
+unnormalised_entropy_over_concepts = get_predictive_entropy_over_concepts(-overall_results['neg_log_likelihoods'], overall_results['semantic_set_ids'])
 
 margin_measures = get_margin_probability_uncertainty_measure(-overall_results['average_neg_log_likelihoods'])
 unnormalised_margin_measures = get_margin_probability_uncertainty_measure(-overall_results['neg_log_likelihoods'])

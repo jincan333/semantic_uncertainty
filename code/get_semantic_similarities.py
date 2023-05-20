@@ -14,7 +14,7 @@ import config
 import wandb
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--generation_model', type=str, default='opt-125m')
+parser.add_argument('--generation_model', type=str, default='opt-2.7b')
 parser.add_argument('--run_id', type=str, default='run_1')
 args = parser.parse_args()
 
@@ -37,7 +37,7 @@ torch.manual_seed(seed_value)
 
 os.environ["HF_DATASETS_CACHE"] = config.hf_datasets_cache
 
-generation_tokenizer = AutoTokenizer.from_pretrained(f"facebook/opt-125m", use_fast=False, cache_dir=config.data_dir)
+generation_tokenizer = AutoTokenizer.from_pretrained(f"facebook/opt-2.7b", use_fast=False, cache_dir=config.data_dir)
 
 tokenizer = AutoTokenizer.from_pretrained("microsoft/deberta-large-mnli")
 model = AutoModelForSequenceClassification.from_pretrained("microsoft/deberta-large-mnli").cuda()
