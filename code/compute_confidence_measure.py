@@ -2,7 +2,6 @@ import argparse
 import os
 import pickle
 import random
-
 import config
 import numpy as np
 import torch
@@ -14,28 +13,21 @@ parser.add_argument('--evaluation_model', type=str, default='opt-2.7b')
 parser.add_argument('--run_id', type=str, default='run_1')
 parser.add_argument('--verbose', type=bool, default=True)
 args = parser.parse_args()
-
 device = 'cuda'
 
 # Set a seed value
 seed_value = 10
 # 1. Set `PYTHONHASHSEED` environment variable at a fixed value
-
 os.environ['PYTHONHASHSEED'] = str(seed_value)
 # 2. Set `python` built-in pseudo-random generator at a fixed value
-
 random.seed(seed_value)
 # 3. Set `numpy` pseudo-random generator at a fixed value
-
 np.random.seed(seed_value)
-
 #Fix torch random seed
 torch.manual_seed(seed_value)
-
 os.environ["HF_DATASETS_CACHE"] = config.hf_datasets_cache
 
 wandb.init(project='nlg_uncertainty', id=args.run_id, config=args, resume='allow')
-
 run_name = wandb.run.name
 
 llh_shift = torch.tensor(5.0)
@@ -43,15 +35,12 @@ llh_shift = torch.tensor(5.0)
 
 def get_overall_log_likelihoods(list_of_results):
     """Compute log likelihood of all generations under their given context.
-    
     list_of_results: list of dictionaries with keys:
-    
     returns: dictionary with keys: 'neg_log_likelihoods', 'average_neg_log_likelihoods'
              that contains tensors of shape (num_models, num_generations, num_samples_per_generation)
     """
 
     result_dict = {}
-
     list_of_keys = ['neg_log_likelihoods', 'average_neg_log_likelihoods', 'sequence_embeddings',\
                     'pointwise_mutual_information', 'average_neg_log_likelihood_of_most_likely_gen',\
                     'neg_log_likelihood_of_most_likely_gen', 'average_neg_log_likelihood_of_second_most_likely_gen',\
@@ -66,29 +55,22 @@ def get_overall_log_likelihoods(list_of_results):
                 average_neg_log_likelihoods = sample[key]
                 list_of_ids.append(sample['id'][0])
                 results_per_model.append(average_neg_log_likelihoods)
-
             results_per_model = torch.stack(results_per_model)
-
             overall_results.append(results_per_model)
-
         if key != 'sequence_embeddings':
             overall_results = torch.stack(overall_results)
-
         result_dict[key] = overall_results
-
     result_dict['ids'] = list_of_ids
     return result_dict
 
 
 def get_mutual_information(log_likelihoods):
     """Compute confidence measure for a given set of likelihoods"""
-
     mean_across_models = torch.logsumexp(log_likelihoods, dim=0) - torch.log(torch.tensor(log_likelihoods.shape[0]))
     tiled_mean = mean_across_models.tile(log_likelihoods.shape[0], 1, 1)
     diff_term = torch.exp(log_likelihoods) * log_likelihoods - torch.exp(tiled_mean) * tiled_mean
     f_j = torch.div(torch.sum(diff_term, dim=0), diff_term.shape[0])
     mutual_information = torch.div(torch.sum(torch.div(f_j, mean_across_models), dim=1), f_j.shape[-1])
-
     return mutual_information
 
 
@@ -96,7 +78,6 @@ def get_log_likelihood_variance(neg_log_likelihoods):
     """Compute log likelihood variance of approximate posterior predictive"""
     mean_across_models = torch.mean(neg_log_likelihoods, dim=0)
     variance_of_neg_log_likelihoods = torch.var(mean_across_models, dim=1)
-
     return variance_of_neg_log_likelihoods
 
 
@@ -104,7 +85,6 @@ def get_log_likelihood_mean(neg_log_likelihoods):
     """Compute softmax variance of approximate posterior predictive"""
     mean_across_models = torch.mean(neg_log_likelihoods, dim=0)
     mean_of_neg_log_likelihoods = torch.mean(mean_across_models, dim=1)
-
     return mean_of_neg_log_likelihoods
 
 
@@ -137,7 +117,6 @@ def get_predictive_entropy_over_concepts(log_likelihoods, semantic_set_ids):
         aggregated_likelihoods = torch.tensor(aggregated_likelihoods) - llh_shift
         entropy = - torch.sum(aggregated_likelihoods, dim=0) / torch.tensor(aggregated_likelihoods.shape[0])
         entropies.append(entropy)
-
     return torch.tensor(entropies)
 
 
@@ -146,7 +125,6 @@ def get_margin_probability_uncertainty_measure(log_likelihoods):
     mean_across_models = torch.logsumexp(log_likelihoods, dim=0) - torch.log(torch.tensor(log_likelihoods.shape[0]))
     topk_likelihoods, indices = torch.topk(mean_across_models, 2, dim=1, sorted=True)
     margin_probabilities = np.exp(topk_likelihoods[:, 0]) - np.exp(topk_likelihoods[:, 1])
-
     return margin_probabilities
 
 
@@ -162,7 +140,6 @@ mutual_information = get_mutual_information(-overall_results['neg_log_likelihood
 predictive_entropy = get_predictive_entropy(-overall_results['neg_log_likelihoods'])
 predictive_entropy_over_concepts = get_predictive_entropy_over_concepts(-overall_results['average_neg_log_likelihoods'], overall_results['semantic_set_ids'])
 unnormalised_entropy_over_concepts = get_predictive_entropy_over_concepts(-overall_results['neg_log_likelihoods'], overall_results['semantic_set_ids'])
-
 margin_measures = get_margin_probability_uncertainty_measure(-overall_results['average_neg_log_likelihoods'])
 unnormalised_margin_measures = get_margin_probability_uncertainty_measure(-overall_results['neg_log_likelihoods'])
 

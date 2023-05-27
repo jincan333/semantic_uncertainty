@@ -13,7 +13,7 @@ with open(f'{config.data_dir}/coqa-dev-v1.0.json', 'r') as infile:
 
 rouge = evaluate.load('rouge')
 tokenizer = AutoTokenizer.from_pretrained("microsoft/deberta-large-mnli")
-model = AutoModelForSequenceClassification.from_pretrained("microsoft/deberta-large-mnli").cuda()
+model = AutoModelForSequenceClassification.from_pretrained("microsoft/deberta-large-mnli").to('cuda:0')
 
 dataset = {}
 dataset['story'] = []
@@ -66,22 +66,18 @@ for sample_id, sample in enumerate(data):
                     input = qa_1 + ' [SEP] ' + qa_2
                     inputs.append(input)
         encoded_input = tokenizer.batch_encode_plus(inputs, padding=True)
-        prediction = model(torch.tensor(encoded_input['input_ids'], device='cuda'))['logits']
-
+        prediction = model(torch.tensor(encoded_input['input_ids'], device='cuda:0'))['logits']
         predicted_label = torch.argmax(prediction, dim=1)
         # 0 contradictory
         if 0 in predicted_label:
             has_semantically_different_answers = True
 
         dataset['semantic_variability'].append(has_semantically_different_answers)
-
         results = rouge.compute(predictions=answer_list_1, references=answer_list_2)
         dataset['rouge1'].append(results['rouge1'])
         dataset['rouge2'].append(results['rouge2'])
         dataset['rougeL'].append(results['rougeL'])
 
 dataset_df = pd.DataFrame.from_dict(dataset)
-
 dataset = Dataset.from_pandas(dataset_df)
-
 dataset.save_to_disk(f'{config.data_dir}/coqa_dataset')

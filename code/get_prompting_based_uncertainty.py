@@ -3,7 +3,6 @@ import argparse
 import os
 import pickle
 import random
-
 import accelerate
 import matplotlib.pyplot as plt
 import numpy as np
@@ -13,7 +12,6 @@ from sklearn.metrics import roc_auc_score
 import torch
 from tqdm import tqdm
 from transformers import AutoModelForCausalLM, AutoTokenizer
-
 import config
 #sns.color_palette("pastel")
 import wandb
@@ -22,22 +20,16 @@ from config import device_map
 # Set a seed value
 seed_value = 10
 # 1. Set `PYTHONHASHSEED` environment variable at a fixed value
-
 os.environ['PYTHONHASHSEED'] = str(seed_value)
 # 2. Set `python` built-in pseudo-random generator at a fixed value
-
 random.seed(seed_value)
 # 3. Set `numpy` pseudo-random generator at a fixed value
-
 np.random.seed(seed_value)
-
 device = torch.device('cuda')
-
 #Fix torch random seed
 torch.manual_seed(seed_value)
 
 os.environ["HF_DATASETS_CACHE"] = config.hf_datasets_cache
-
 parser = argparse.ArgumentParser()
 parser.add_argument('--generation_model', type=str, default='opt-2.7b')
 parser.add_argument('--run_id_for_few_shot_prompt', type=str, default='run_1')
@@ -45,12 +37,10 @@ parser.add_argument('--run_id_for_evaluation', type=str, default='run_1')
 args = parser.parse_args()
 
 wandb.init(project='nlg_uncertainty', id=args.run_id_for_few_shot_prompt, config=args, resume='allow')
-model_name = wandb.config.model
 
-generation_tokenizer = AutoTokenizer.from_pretrained(f"facebook/opt-2.7b", use_fast=False, cache_dir=config.data_dir)
-model = AutoModelForCausalLM.from_pretrained(f"facebook/{model_name}",
-                                             torch_dtype=torch.float16,
-                                             cache_dir=config.data_dir).cuda()
+model_name = wandb.config.model
+generation_tokenizer = AutoTokenizer.from_pretrained(f"facebook/{model_name}", use_fast=False, cache_dir=config.data_dir)
+model = AutoModelForCausalLM.from_pretrained(f"facebook/{model_name}", torch_dtype=torch.float16, cache_dir=config.data_dir).cuda()
 
 if model_name == 'opt-30b':
     accelerate.dispatch_model(model, device_map=device_map)
@@ -58,14 +48,11 @@ if model_name == 'opt-30b':
     device = torch.device('cuda:1')
 
 run_name = wandb.run.name
-
 with open(f'{config.output_dir}/clean/{run_name}/{model_name}_generations.pkl', 'rb') as infile:
     sequences_for_few_shot_prompt = pickle.load(infile)
-
 wandb.finish()
 
 # Build few shot prompt
-
 subset_of_sequences_for_few_shot_prompt = sequences_for_few_shot_prompt[-10:]
 number_of_few_shot_samples = 5
 
@@ -78,22 +65,19 @@ for sequence in subset_of_sequences_for_few_shot_prompt:
     generated_texts = '\n'.join(sequence['cleaned_generated_texts'][:number_of_few_shot_samples])
 
     most_likely_answer = sequence['most_likely_generation']
+    # TODO 采用这个作为判断正确和错误的条件是否过于宽松
     correct = ' True' if sequence['rougeL_to_target'] > 0.3 else ' False'
     few_shot_promopt += prompt_template.format(question, generated_texts, most_likely_answer) + correct + '\n'
 
 # Build prompt for question
 labels_across_datasets = []
 p_trues_across_datasets = []
-
 n_samples_to_use = 2000
-
 with torch.no_grad():
-
     aurocs = []
     p_trues = []
     corrects = []
     for sequence in tqdm(sequences_for_few_shot_prompt[:n_samples_to_use]):
-
         question = sequence['question']
         if 'Question: ' in question:
             question = question.split('Question: ')[-1].split('Answer: ')[0]

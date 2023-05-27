@@ -20,7 +20,7 @@ parser.add_argument('--num_generations_per_prompt', type=int, default=5)
 parser.add_argument('--fraction_of_data_to_use', type=float, default=0.9)
 parser.add_argument('--model', type=str, default='opt-2.7b')
 parser.add_argument('--run_id', type=str, default='run_1')
-parser.add_argument('--temperature', type=float, default='1.0')
+parser.add_argument('--temperature', type=float, default='0.5')
 parser.add_argument('--num_beams', type=int, default='5')
 parser.add_argument('--decoding_method', type=str, default='beam_search')
 parser.add_argument('--top_p', type=float, default=1.0)
@@ -28,38 +28,27 @@ parser.add_argument('--dataset', type=str, default='coqa')
 args = parser.parse_args()
 
 wandb.init(project='nlg_uncertainty', id=args.run_id, config=args, resume='allow')
-
 run_name = wandb.run.name
-
 device = 'cuda'
-
 # Set a seed value
 seed_value = 10
 # 1. Set `PYTHONHASHSEED` environment variable at a fixed value
 import os
-
 os.environ['PYTHONHASHSEED'] = str(seed_value)
 # 2. Set `python` built-in pseudo-random generator at a fixed value
 import random
-
 random.seed(seed_value)
 # 3. Set `numpy` pseudo-random generator at a fixed value
 np.random.seed(seed_value)
-
 #Fix torch random seed
 torch.manual_seed(seed_value)
-
 os.environ["HF_DATASETS_CACHE"] = config.hf_datasets_cache
 
-model = AutoModelForCausalLM.from_pretrained(f"facebook/{args.model}",
-                                             torch_dtype=torch.float16,
-                                             cache_dir=config.hf_cache_dir).cuda()
+model = AutoModelForCausalLM.from_pretrained(f"facebook/{args.model}", torch_dtype=torch.float16, cache_dir=config.hf_cache_dir).cuda()
 
 if args.model == 'opt-30b':
     accelerate.dispatch_model(model, device_map=config.device_map)
-
 tokenizer = AutoTokenizer.from_pretrained(f"facebook/{args.model}", use_fast=False, cache_dir=config.hf_cache_dir)
-
 opt_models = ['opt-125m', 'opt-350m', 'opt-1.3b', 'opt-2.7b', 'opt-6.7b', 'opt-13b', 'opt-30b']
 
 if args.dataset == 'coqa':
@@ -115,12 +104,14 @@ def get_generations(model, dataloader, number_of_generations):
             if args.decoding_method == 'beam_search':
                 most_likely_generation = model.generate(input_ids,
                                                         num_beams=5,
+                                                        #  The number of independently computed returned sequences for each element in the batch.
+                                                        # TODO 需要确认是否概率和为1，需要确认是否是概率最大的2个
                                                         num_return_sequences=2,
                                                         do_sample=False,
-                                                        max_length=input_ids.shape[1] +
-                                                        max_length_of_generated_sequence,
+                                                        max_length=input_ids.shape[1] + max_length_of_generated_sequence,
                                                         eos_token_id=period_token_id,
                                                         bad_words_ids=question_framing_ids)
+                # TODO 没有获取每个sequence的logits和概率
             elif args.decoding_method == 'greedy':
                 most_likely_generation = model.generate(input_ids,
                                                         num_beams=1,
@@ -135,7 +126,6 @@ def get_generations(model, dataloader, number_of_generations):
                                      dtype=torch.long,
                                      device=device)
             for i in range(number_of_generations):
-
                 generation = model.generate(input_ids,
                                             do_sample=True,
                                             num_return_sequences=1,
@@ -167,42 +157,26 @@ def get_generations(model, dataloader, number_of_generations):
                         'few_shot_question': tokenizer.decode(input_ids[0]),
                         'question': question
                     }
-
                 generated_texts = []
                 for generation in generations[i]:
-                    generated_texts.append(
-                        tokenizer.decode(generation[len(batch['input_ids'][i]):], skip_special_tokens=True))
-
+                    generated_texts.append(tokenizer.decode(generation[len(batch['input_ids'][i]):], skip_special_tokens=True))
                 sequence_dict['generated_texts'] = generated_texts
                 sequence_dict['most_likely_generation_ids'] = most_likely_generation[0].to('cpu')
-                sequence_dict['most_likely_generation'] = tokenizer.decode(
-                    most_likely_generation[0][len(batch['input_ids'][i]):], skip_special_tokens=True)
-
+                sequence_dict['most_likely_generation'] = tokenizer.decode( most_likely_generation[0][len(batch['input_ids'][i]):], skip_special_tokens=True)
                 sequence_dict['second_most_likely_generation_ids'] = most_likely_generation[1].to('cpu')
-                sequence_dict['second_most_likely_generation'] = tokenizer.decode(
-                    most_likely_generation[1][len(batch['input_ids'][i]):], skip_special_tokens=True)
-
-                sequence_dict['semantic_variability_reference_answers'] = batch[
-                    'semantic_variability'] if 'semantic_variability' in batch else None
+                sequence_dict['second_most_likely_generation'] = tokenizer.decode(most_likely_generation[1][len(batch['input_ids'][i]):], skip_special_tokens=True)
+                sequence_dict['semantic_variability_reference_answers'] = batch['semantic_variability'] if 'semantic_variability' in batch else None
                 rouge_types = ['rouge1', 'rouge2', 'rougeL']
                 for rouge_type in rouge_types:
                     if rouge_type in batch:
                         sequence_dict[rouge_type + '_reference_answers'] = batch[rouge_type]
-
                     else:
                         sequence_dict[rouge_type + '_reference_answers'] = None
-
                     sequence_dict[rouge_type + '_to_target'] = 0.0
-
                 sequence_dict['answer'] = batch['answer']['text'] if args.dataset == 'coqa' else batch['answer']
-                sequence_dict['additional_answers'] = [x[0] for x in batch['additional_answers']
-                                                      ] if args.dataset == 'coqa' else None
-
+                sequence_dict['additional_answers'] = [x[0] for x in batch['additional_answers']] if args.dataset == 'coqa' else None
                 sequence_dict['exact_match'] = 0.0
-
-                reference_answers = batch['answer']['text'] + [x[0] for x in batch['additional_answers']
-                                                              ] if args.dataset == 'coqa' else batch['answer']
-
+                reference_answers = batch['answer']['text'] + [x[0] for x in batch['additional_answers']] if args.dataset == 'coqa' else batch['answer']
                 for answer in reference_answers:
                     predictions = [sequence_dict['most_likely_generation'].lstrip()]
                     references = [answer]
@@ -215,9 +189,7 @@ def get_generations(model, dataloader, number_of_generations):
                     for rouge_type in rouge_types:
                         # sequence_dict[rouge_type + '_to_target'] = max(rouge_results[rouge_type].mid.fmeasure,
                         #                                                sequence_dict[rouge_type + '_to_target'])
-                        sequence_dict[rouge_type + '_to_target'] = max(rouge_results[rouge_type],
-                                                                       sequence_dict[rouge_type + '_to_target'])
-
+                        sequence_dict[rouge_type + '_to_target'] = max(rouge_results[rouge_type], sequence_dict[rouge_type + '_to_target'])
                 sequences.append(sequence_dict)
 
     return sequences
